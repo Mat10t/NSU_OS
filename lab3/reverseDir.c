@@ -159,7 +159,7 @@ void reverseDir(const char *srcDir, const char *dstDir) {
     mode_t oldPermissionsSrc = getPermission(srcDir);
     mode_t oldPermissionDst;
     int permissionFlag = 0;
-    //sleep(10000);
+    //sleep(10);
 
     DIR *dir = opendir(srcDir);
     if (!dir) {
