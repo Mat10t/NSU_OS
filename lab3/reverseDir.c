@@ -24,8 +24,19 @@ mode_t setPermission(const char *path) {
         return 0;
     }
     mode_t originalPermission = statBuf.st_mode & 0777;
-    chmod(path, 0777); 
+    if(chmod(path, 0777) == -1) {
+        perror("Permission change error");
+    } 
     return originalPermission;
+}
+
+mode_t getPermission(const char *path) {
+    struct stat statBuf;
+    if (stat(path, &statBuf) == -1) {
+        perror("Error permisson reading");
+        return 0;
+    }
+    return statBuf.st_mode & 0777;
 }
 
 void copyAndReverseFile(const char *srcPath, const char *dstPath, mode_t newPermission) {
@@ -47,9 +58,13 @@ void copyAndReverseFile(const char *srcPath, const char *dstPath, mode_t newPerm
     if (dst == -1) {
         perror("Error creating the target file");
         if (permissionFlag) {
-            chmod(dstPath, oldPermission);
+            if (chmod(dstPath, oldPermission) == -1) {
+                perror("Permission change error");
+            } 
         }
-        close(src);
+        if(close(src) == -1) {
+            perror("File closing error");
+        }
         return;
     }
 
@@ -57,10 +72,16 @@ void copyAndReverseFile(const char *srcPath, const char *dstPath, mode_t newPerm
     if (offset == -1) {
         perror("File size detection error");
         if (permissionFlag) {
-            chmod(dstPath, oldPermission);
+            if (chmod(dstPath, oldPermission) == -1) {
+                perror("Permission change error");
+            }
         }
-        close(src);
-        close(dst);
+        if(close(src) == -1) {
+            perror("File closing error");
+        }
+        if(close(dst) == -1) {
+            perror("File closing error");
+        }
         return;
     }
 
@@ -73,6 +94,17 @@ void copyAndReverseFile(const char *srcPath, const char *dstPath, mode_t newPerm
 
         if (lseek(src, offset, SEEK_SET) == -1) {
             perror("Error during lseek");
+            if (permissionFlag) {
+                if (chmod(dstPath, oldPermission) == -1) {
+                    perror("Permission change error");
+                }
+            }
+            if(close(src) == -1) {
+                perror("File closing error");
+            }
+            if(close(dst) == -1) {
+                perror("File closing error");
+            }
             break;
         }
 
@@ -80,11 +112,17 @@ void copyAndReverseFile(const char *srcPath, const char *dstPath, mode_t newPerm
         if (bytesRead <= 0) {
             perror("File reading error");
             if (permissionFlag) {
-                chmod(dstPath, oldPermission);
+                if (chmod(dstPath, oldPermission) == -1) {
+                    perror("Permission change error");
+                }
             }
-            close(src);
-            close(dst);
-            break;
+            if(close(src) == -1) {
+                perror("File closing error");
+            }
+            if(close(dst) == -1) {
+                perror("File closing error");
+            }
+            return;
         }
 
         for (size_t i = 0; i < bytesRead / 2; i++) {
@@ -93,12 +131,21 @@ void copyAndReverseFile(const char *srcPath, const char *dstPath, mode_t newPerm
             buffer[bytesRead - i - 1] = temp;
         }
 
-        write(dst, buffer, bytesRead) != bytesRead;
+        ssize_t bytesWrite = write(dst, buffer, bytesRead);
+        if(bytesWrite != bytesRead) {
+            write(dst, buffer + bytesWrite, bytesRead - bytesWrite);
+        }
     }
 
-    fchmod(dst, newPermission);
-    close(src);
-    close(dst);
+    if(fchmod(dst, newPermission) == -1) {
+        perror("Permission change error");
+    }
+    if(close(src) == -1) {
+        perror("File closing error");
+    }
+    if(close(dst) == -1) {
+        perror("File closing error");
+    }
 }
 
 void reverseDir(const char *srcDir, const char *dstDir) {
@@ -109,29 +156,30 @@ void reverseDir(const char *srcDir, const char *dstDir) {
         return;
     }
 
-    mode_t oldPermissionsSrc = setPermission(srcDir);
+    mode_t oldPermissionsSrc = getPermission(srcDir);
     mode_t oldPermissionDst;
     int permissionFlag = 0;
+    //sleep(10000);
+
+    DIR *dir = opendir(srcDir);
+    if (!dir) {
+        perror("Folder opening error");
+        if (permissionFlag) {
+            if (chmod(dstDir, oldPermissionDst) == -1) {
+                perror("Permission change error");
+            }
+        }
+        return;
+    }
 
     if (stat(dstDir, &dirStat) == -1) {
         if (mkdir(dstDir, 0755) != 0) {
             perror("Folder creation error");
-            chmod(srcDir, oldPermissionsSrc);
             return;
         }
     } else {
         oldPermissionDst = setPermission(dstDir);
         permissionFlag = 1;
-    }
-
-    DIR *dir = opendir(srcDir);
-    if (!dir) {
-        perror("Folder opening error");
-        chmod(srcDir, oldPermissionsSrc);
-        if (permissionFlag) {
-            chmod(dstDir, oldPermissionDst);
-        }
-        return;
     }
 
     struct dirent *entry;
@@ -150,17 +198,25 @@ void reverseDir(const char *srcDir, const char *dstDir) {
         snprintf(dstPath, sizeof(dstPath), "%s/%s", dstDir, reversedDir);
 
         if (entry->d_type == DT_REG) {
-            mode_t fileMode = setPermission(srcPath);
+            mode_t fileMode = getPermission(srcPath);
             copyAndReverseFile(srcPath, dstPath, fileMode);
-            chmod(srcPath, fileMode);
+            if (chmod(srcPath, fileMode) == -1) {
+                perror("Permission change error");
+            }
         } else if (entry->d_type == DT_DIR) {
             reverseDir(srcPath, dstPath);
         }
     }
 
-    closedir(dir);
-    chmod(srcDir, oldPermissionsSrc);
-    chmod(dstDir, oldPermissionsSrc);
+    if(closedir(dir) == -1) {
+        perror("Directory closing error");
+    }
+    if (chmod(srcDir, oldPermissionsSrc) == -1) {
+        perror("Permission change error");
+    }
+    if (chmod(dstDir, oldPermissionsSrc) == -1) {
+        perror("Permission change error");
+    }
 }
 
 int main(int argc, char *argv[]) {
