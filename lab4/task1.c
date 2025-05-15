@@ -51,7 +51,7 @@ void printDynamicMemory() {
 
     //free(midBuffer); //не компилируется
 
-    printf("After freeing midBuffer, buffer content: %s\n", buffer);
+    //printf("After freeing midBuffer, buffer content: %s\n", buffer);
 
     free(buffer);
 }
@@ -63,6 +63,7 @@ void printAddresses() {
 
     int localVarUninited;
     static int staticVarUninited;
+    const int constVarUninited;
 
     printf("Local inited:\n");
     printf("Local variable address: %p\n", &localVarInited);
@@ -72,6 +73,7 @@ void printAddresses() {
     printf("Local uninited:\n");
     printf("Local variable address: %p\n", &localVarUninited);
     printf("Static variable address: %p\n", &staticVarUninited);
+    printf("Const variable address: %p\n", &constVarUninited);
 
     printf("Global:\n");
     printf("Global initialized address: %p\n", &globalInited);
